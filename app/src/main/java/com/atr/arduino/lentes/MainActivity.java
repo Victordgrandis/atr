@@ -1,31 +1,36 @@
 package com.atr.arduino.lentes;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.Intent;
+import android.graphics.Color;
+import android.media.AudioAttributes;
+import android.media.SoundPool;
 import android.os.Bundle;
 import android.os.Handler;
+import android.util.Log;
 import android.view.View;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.ListView;
 import android.widget.TextView;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 
 public class MainActivity extends Activity {
     // App Variables
-    TextView Conectado,Cantidad1,Cantidad2,Cantidad3,Promedio,Error;
-    Button conectarButton,desconectarButton;
+    TextView Conectado, Distancia, Promedio, Error;
+    Button conectarButton, desconectarButton;
     ArrayList<String> Datos;
-    Float promedio,error;
+    Float promedio, error;
+    boolean listo = true;
+    // Sonido
+    SoundPool soundPool;
+    int soundID;
     // Bluetooth variables
     BluetoothAdapter btAdapter;
     BluetoothSocket btSocket;
@@ -37,6 +42,7 @@ public class MainActivity extends Activity {
     volatile boolean stopWorker;
     private static final UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
     private static final String address = "30:14:06:26:01:02";
+    private static final String tag = "MainActivity";
 
 
     @Override
@@ -45,14 +51,21 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
 
         Conectado = (TextView) findViewById(R.id.conectado);
-        Cantidad1 = (TextView) findViewById(R.id.cantidad1);
-        Cantidad2 = (TextView) findViewById(R.id.cantidad2);
-        Cantidad3 = (TextView) findViewById(R.id.cantidad3);
+        Distancia = (TextView) findViewById(R.id.distancia);
         Promedio = (TextView) findViewById(R.id.promedio);
         Error = (TextView) findViewById(R.id.error);
-        conectarButton = (Button)findViewById(R.id.conectar);
+        conectarButton = (Button) findViewById(R.id.conectar);
         desconectarButton = (Button) findViewById(R.id.desconectar);
-        Datos = new ArrayList<String>();
+        Datos = new ArrayList<>();
+        inicializarSonido();
+
+        try
+        {
+            findBT();
+            openBT();
+        } catch (IOException ex) {
+            Log.e(tag, "Error al conectar dispositivo bluetooth");
+        }
 
         conectarButton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
@@ -61,22 +74,22 @@ public class MainActivity extends Activity {
                     findBT();
                     openBT();
                 } catch (IOException ex) {
+                    Log.e(tag, "Error al conectar dispositivo bluetooth");
                 }
             }
         });
 
-        desconectarButton.setOnClickListener(new View.OnClickListener()
-        {
-            public void onClick(View v)
-            {
-                try
-                {
+        desconectarButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                try {
                     closeBT();
+                } catch (IOException ex) {
+                    Log.e(tag, "Error al desconectar dispositivo bluetooth");
                 }
-                catch (IOException ex) { }
             }
         });
     }
+
     private void findBT() {
         btAdapter = BluetoothAdapter.getDefaultAdapter();
         if (btAdapter == null) {
@@ -94,7 +107,7 @@ public class MainActivity extends Activity {
         btSocket.connect();
         mmOutputStream = btSocket.getOutputStream();
         mmInputStream = btSocket.getInputStream();
-        Conectado.setText("Conectado");
+        Conectado.setText(R.string.conectado);
         Conectado.setTextColor(getResources().getColor(R.color.green));
         beginListenForData();
     }
@@ -141,32 +154,100 @@ public class MainActivity extends Activity {
         workerThread.start();
     }
 
-    void sendData() throws IOException {
-    }
 
     void closeBT() throws IOException {
         stopWorker = true;
         mmOutputStream.close();
         mmInputStream.close();
         btSocket.close();
-        Conectado.setText("Desconectado");
+        Conectado.setText(R.string.desconectado);
         Conectado.setTextColor(getResources().getColor(R.color.red));
     }
-    void mostrarDatos(String data){
-        Datos.add(data);
-        Cantidad1.setText("Distancia: "+data);
-        if(Datos.size()>3) {
-            promedio = (Float.parseFloat(Datos.get(Datos.size()-2)) + Float.parseFloat(Datos.get(Datos.size() - 3)) + Float.parseFloat(data))/3;
-            error = Float.parseFloat(data) - promedio;
-            Promedio.setText("Promedio: "+String.valueOf(promedio));
-            Error.setText("Error: "+String.valueOf(error));
-            Cantidad2.setText("Distancia: "+Datos.get(Datos.size() - 2));
-            Cantidad3.setText("Distancia: "+Datos.get(Datos.size() - 3));
+
+    void inicializarSonido() {
+        AudioAttributes audioAttributes = new AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build();
+        soundPool = new SoundPool.Builder().setMaxStreams(10).setAudioAttributes(audioAttributes)
+                .build();
+        soundID = soundPool.load(this, R.raw.beep, 1);
+        soundPool.setOnLoadCompleteListener(new SoundPool.OnLoadCompleteListener() {
+            @Override
+            public void onLoadComplete(SoundPool soundPool, int sampleId, int status) {
+                listo = true;
+            }
+        });
+    }
+
+    @SuppressLint("SetTextI18n")
+    void mostrarDatos(final String distancia) {
+        Thread alertaThread;
+        Datos.add(distancia);
+        Distancia.setText("Distancia: " + distancia);
+        alertaThread = new Thread (new Runnable(){
+            public void run(){
+                try {
+                    alertaProximidad(Float.parseFloat(distancia));
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+        alertaThread.start();
+        /* Cálculo del promedio de 3 muestras
+        if (Datos.size() > 3) {
+            promedio = (Float.parseFloat(Datos.get(Datos.size() - 2)) + Float.parseFloat(Datos.get(Datos.size() - 3)) + Float.parseFloat(distancia)) / 3;
+            alertaProximidad(promedio);
+            error = Float.parseFloat(distancia) - promedio;
+            Promedio.setText("Promedio: " + String.valueOf(promedio));
+            Error.setText("Error: " + String.valueOf(error));
         }
-        if(Datos.size()>50){
-            for(int i = 0; i<20;i++){
+        */
+        if (Datos.size() > 50) { // Limpieza del arrayList
+            for (int i = 0; i < 20; i++) {
                 Datos.remove(i);
             }
+        }
+    }
+
+    void alertaProximidad(Float distancia) throws InterruptedException { // Aviso de proximidad por sonido
+        int d = (int) Math.ceil(distancia / 10);
+        switch (d) {
+            case 1: {
+                sonar(100);
+                /*
+                Promedio.setTextColor(Color.RED);
+                if (listo) {
+                    try {
+                        NotificationManager notificationManager = (NotificationManager) this.getSystemService(Context.NOTIFICATION_SERVICE);
+                        Uri soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+                        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(getApplicationContext()).setSound(soundUri);
+                        notificationManager.notify(0, mBuilder.build());
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+                */
+                break;
+            }
+            case 2: {
+                sonar(300);
+                break;
+            }
+            case 3:{
+                sonar(400);
+                break;
+            }
+            case 4: {
+                break;
+            }
+        }
+    }
+
+    synchronized void sonar(long t) throws InterruptedException {
+        if (listo) {
+            soundPool.play(soundID, 0.5f, 0.5f, 1, 0, 1f);
+            wait(t);
         }
     }
 }

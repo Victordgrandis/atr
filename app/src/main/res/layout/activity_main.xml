@@ -14,7 +14,7 @@
         android:layout_height="wrap_content"
         android:layout_alignParentRight="true"
         android:layout_marginLeft="10dip"
-        android:text="Conectar" />
+        android:text="@string/conectar" />
 
     <Button
         android:id="@+id/desconectar"
@@ -33,35 +33,21 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Cantidad1"
-        android:id="@+id/cantidad1"
+        android:text="@string/distancia"
+        android:id="@+id/distancia"
         android:paddingBottom="20dp"/>
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Cantidad2"
-        android:id="@+id/cantidad2"
-        android:paddingBottom="20dp"/>
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Cantidad3"
-        android:id="@+id/cantidad3"
-        android:paddingBottom="20dp"/>
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Promedio"
+        android:text="@string/promedio"
         android:id="@+id/promedio"
         android:paddingBottom="20dp"/>
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Error"
+        android:text="@string/error"
         android:textColor="@color/red"
         android:id="@+id/error"/>
 
@@ -70,7 +56,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Desconectado"
+        android:text="@string/desconectado"
         android:id="@+id/conectado"
         android:textColor="@color/red"
         android:layout_alignParentBottom="true"

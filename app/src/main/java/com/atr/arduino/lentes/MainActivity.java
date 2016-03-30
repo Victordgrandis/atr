@@ -6,28 +6,34 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.Intent;
-import android.graphics.Color;
 import android.media.AudioAttributes;
 import android.media.SoundPool;
 import android.os.Bundle;
 import android.os.Handler;
+import android.speech.RecognizerIntent;
 import android.util.Log;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.ListView;
 import android.widget.TextView;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.UUID;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class MainActivity extends Activity {
     // App Variables
-    TextView Conectado, Distancia, Promedio, Error;
+    TextView Conectado, Distancia;
     Button conectarButton, desconectarButton;
     ArrayList<String> Datos;
     Float promedio, error;
-    boolean listo = true;
+    String distancia;
+    public ListView mList;
+    boolean listo= true;
     // Sonido
     SoundPool soundPool;
     int soundID;
@@ -36,13 +42,14 @@ public class MainActivity extends Activity {
     BluetoothSocket btSocket;
     OutputStream mmOutputStream;
     InputStream mmInputStream;
-    Thread workerThread;
+    Thread workerThread, alertaThread;
     byte[] readBuffer;
     int readBufferPosition;
     volatile boolean stopWorker;
     private static final UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
     private static final String address = "30:14:06:26:01:02";
     private static final String tag = "MainActivity";
+    public static final int VOICE_RECOGNITION_REQUEST_CODE = 1234;
 
 
     @Override
@@ -52,13 +59,11 @@ public class MainActivity extends Activity {
 
         Conectado = (TextView) findViewById(R.id.conectado);
         Distancia = (TextView) findViewById(R.id.distancia);
-        Promedio = (TextView) findViewById(R.id.promedio);
-        Error = (TextView) findViewById(R.id.error);
         conectarButton = (Button) findViewById(R.id.conectar);
         desconectarButton = (Button) findViewById(R.id.desconectar);
         Datos = new ArrayList<>();
         inicializarSonido();
-
+        /*
         try
         {
             findBT();
@@ -66,29 +71,34 @@ public class MainActivity extends Activity {
         } catch (IOException ex) {
             Log.e(tag, "Error al conectar dispositivo bluetooth");
         }
-
+        */
         conectarButton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                try
-                {
+                startVoiceRecognitionActivity();
+/*
+                try {
                     findBT();
                     openBT();
                 } catch (IOException ex) {
                     Log.e(tag, "Error al conectar dispositivo bluetooth");
                 }
+*/
             }
         });
 
         desconectarButton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
+
                 try {
                     closeBT();
                 } catch (IOException ex) {
                     Log.e(tag, "Error al desconectar dispositivo bluetooth");
                 }
+
             }
         });
     }
+
 
     private void findBT() {
         btAdapter = BluetoothAdapter.getDefaultAdapter();
@@ -109,10 +119,11 @@ public class MainActivity extends Activity {
         mmInputStream = btSocket.getInputStream();
         Conectado.setText(R.string.conectado);
         Conectado.setTextColor(getResources().getColor(R.color.green));
-        beginListenForData();
+        escucharDatos();
+        alertar();
     }
 
-    private void beginListenForData() {
+    private void escucharDatos() {
         final Handler handler = new Handler();
         final byte delimiter = 10; //This is the ASCII code for a newline character
 
@@ -136,7 +147,7 @@ public class MainActivity extends Activity {
                                     readBufferPosition = 0;
                                     handler.post(new Runnable() {
                                         public void run() {
-                                            mostrarDatos(data);
+                                            almacenarDatos(data);
                                         }
                                     });
                                 } else {
@@ -153,7 +164,22 @@ public class MainActivity extends Activity {
 
         workerThread.start();
     }
-
+    void alertar(){
+        final int[] cont = {0};
+        final Float[] dato = {Float.valueOf(0)};
+        alertaThread = new Thread(new Runnable() {
+            public void run() {
+                while(!Thread.currentThread().isInterrupted() && btSocket.isConnected()) {
+                    try {
+                        alertaProximidad();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        });
+        alertaThread.start();
+    }
 
     void closeBT() throws IOException {
         stopWorker = true;
@@ -180,29 +206,9 @@ public class MainActivity extends Activity {
     }
 
     @SuppressLint("SetTextI18n")
-    void mostrarDatos(final String distancia) {
-        Thread alertaThread;
+    void almacenarDatos(final String distancia) {
         Datos.add(distancia);
         Distancia.setText("Distancia: " + distancia);
-        alertaThread = new Thread (new Runnable(){
-            public void run(){
-                try {
-                    alertaProximidad(Float.parseFloat(distancia));
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-        });
-        alertaThread.start();
-        /* Cálculo del promedio de 3 muestras
-        if (Datos.size() > 3) {
-            promedio = (Float.parseFloat(Datos.get(Datos.size() - 2)) + Float.parseFloat(Datos.get(Datos.size() - 3)) + Float.parseFloat(distancia)) / 3;
-            alertaProximidad(promedio);
-            error = Float.parseFloat(distancia) - promedio;
-            Promedio.setText("Promedio: " + String.valueOf(promedio));
-            Error.setText("Error: " + String.valueOf(error));
-        }
-        */
         if (Datos.size() > 50) { // Limpieza del arrayList
             for (int i = 0; i < 20; i++) {
                 Datos.remove(i);
@@ -210,44 +216,80 @@ public class MainActivity extends Activity {
         }
     }
 
-    void alertaProximidad(Float distancia) throws InterruptedException { // Aviso de proximidad por sonido
-        int d = (int) Math.ceil(distancia / 10);
-        switch (d) {
-            case 1: {
-                sonar(100);
-                /*
-                Promedio.setTextColor(Color.RED);
-                if (listo) {
-                    try {
-                        NotificationManager notificationManager = (NotificationManager) this.getSystemService(Context.NOTIFICATION_SERVICE);
-                        Uri soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
-                        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(getApplicationContext()).setSound(soundUri);
-                        notificationManager.notify(0, mBuilder.build());
-                    } catch (Exception e) {
-                        e.printStackTrace();
+    void alertaProximidad() throws InterruptedException { // Aviso de proximidad por sonido
+        Lock lock = new ReentrantLock();
+        if(Datos.size()>1) {
+            int d1 = (int) Math.ceil(Float.parseFloat(Datos.get(Datos.size() - 1)) / 10);
+            if (lock.tryLock()) {
+                try {
+                    switch (d1) {
+                        case 1: {
+                            sonar(20);
+                            break;
+                        }
+                        case 2: {
+                            sonar(300);
+                            break;
+                        }
+                        case 3: {
+                            sonar(400);
+                            break;
+                        }
+                        case 4: {
+                            sonar(600);
+                            break;
+                        }
+                        case 5: case 6: {
+                            sonar(800);
+                            break;
+                        }
+                        case 7: case 8: {
+                            sonar(1000);
+                            break;
+                        }
                     }
+                } finally {
+                    lock.unlock();
                 }
-                */
-                break;
-            }
-            case 2: {
-                sonar(300);
-                break;
-            }
-            case 3:{
-                sonar(400);
-                break;
-            }
-            case 4: {
-                break;
             }
         }
     }
 
-    synchronized void sonar(long t) throws InterruptedException {
+    void sonar(long t) throws InterruptedException {
         if (listo) {
             soundPool.play(soundID, 0.5f, 0.5f, 1, 0, 1f);
-            wait(t);
+            Thread.sleep(t);
+        }
+    }
+
+    public void startVoiceRecognitionActivity() {
+        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE,
+                "es");
+        intent.putExtra(RecognizerIntent.EXTRA_PROMPT,
+                "Speech recognition demo");
+        startActivityForResult(intent, VOICE_RECOGNITION_REQUEST_CODE);
+    }
+
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == VOICE_RECOGNITION_REQUEST_CODE && resultCode == RESULT_OK) {
+            ArrayList matches = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+            mList.setAdapter(new ArrayAdapter(this, android.R.layout.simple_list_item_1, matches));
+
+            if (matches.contains("conectar")) {
+                try {
+                    findBT();
+                    openBT();
+                } catch (IOException ex) {
+                    Log.e(tag, "Error al conectar dispositivo bluetooth");
+                }
+            }
         }
     }
 }

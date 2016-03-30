@@ -8,20 +8,6 @@
     android:paddingTop="@dimen/activity_vertical_margin"
     tools:context="com.example.bluetooth.MainActivity" >
 
-    <Button
-        android:id="@+id/conectar"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentRight="true"
-        android:layout_marginLeft="10dip"
-        android:text="@string/conectar" />
-
-    <Button
-        android:id="@+id/desconectar"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Desconectar" />
-
     <LinearLayout
         android:id="@+id/LinearLayout"
         android:layout_width="wrap_content"
@@ -29,28 +15,38 @@
         android:layout_centerHorizontal="true"
         android:layout_centerVertical="true"
         android:orientation="vertical">
+        <ListView
+            android:id="@+id/list"
+            android:layout_width="wrap_content"
+            android:layout_height="200dp"
+            android:layout_gravity="center"></ListView>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:layout_gravity="center"
+            android:padding="20dp">
+
+            <Button
+                android:id="@+id/conectar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/conectar" />
+
+            <Button
+                android:id="@+id/desconectar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Desconectar" />
+        </LinearLayout>
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/distancia"
         android:id="@+id/distancia"
-        android:paddingBottom="20dp"/>
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/promedio"
-        android:id="@+id/promedio"
-        android:paddingBottom="20dp"/>
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/error"
-        android:textColor="@color/red"
-        android:id="@+id/error"/>
-
+        android:layout_gravity="center"/>
     </LinearLayout>
 
     <TextView

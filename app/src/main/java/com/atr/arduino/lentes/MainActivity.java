@@ -17,6 +17,8 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ListView;
 import android.widget.TextView;
+import android.widget.Toast;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -61,9 +63,10 @@ public class MainActivity extends Activity {
         Distancia = (TextView) findViewById(R.id.distancia);
         conectarButton = (Button) findViewById(R.id.conectar);
         desconectarButton = (Button) findViewById(R.id.desconectar);
+        mList = (ListView) findViewById(R.id.list);
         Datos = new ArrayList<>();
         inicializarSonido();
-        /*
+
         try
         {
             findBT();
@@ -71,7 +74,7 @@ public class MainActivity extends Activity {
         } catch (IOException ex) {
             Log.e(tag, "Error al conectar dispositivo bluetooth");
         }
-        */
+
         conectarButton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 startVoiceRecognitionActivity();
@@ -264,12 +267,8 @@ public class MainActivity extends Activity {
 
     public void startVoiceRecognitionActivity() {
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE,
-                "es");
-        intent.putExtra(RecognizerIntent.EXTRA_PROMPT,
-                "Speech recognition demo");
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE,"es");
         startActivityForResult(intent, VOICE_RECOGNITION_REQUEST_CODE);
     }
 
@@ -280,14 +279,26 @@ public class MainActivity extends Activity {
 
         if (requestCode == VOICE_RECOGNITION_REQUEST_CODE && resultCode == RESULT_OK) {
             ArrayList matches = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
-            mList.setAdapter(new ArrayAdapter(this, android.R.layout.simple_list_item_1, matches));
+            if(!matches.isEmpty()){
+                mList.setAdapter(new ArrayAdapter(this, android.R.layout.simple_list_item_1, matches));
 
-            if (matches.contains("conectar")) {
-                try {
-                    findBT();
-                    openBT();
-                } catch (IOException ex) {
-                    Log.e(tag, "Error al conectar dispositivo bluetooth");
+                if (matches.contains("conectar")) {
+                    if(btSocket.isConnected()) {
+                        try {
+                            findBT();
+                            openBT();
+                        } catch (IOException ex) {
+                            Log.e(tag, "Error al conectar dispositivo bluetooth");
+                        }
+                    } else Toast.makeText(this, "Bluetooth ya conectado", Toast.LENGTH_SHORT).show();
+                } else if (matches.contains("desconectar")) {
+                    if(btSocket.isConnected()) {
+                        try {
+                            closeBT();
+                        } catch (IOException ex) {
+                            Log.e(tag, "Error al desconectar dispositivo bluetooth");
+                        }
+                    } else Toast.makeText(this, "Bluetooth no conectado", Toast.LENGTH_SHORT).show();
                 }
             }
         }

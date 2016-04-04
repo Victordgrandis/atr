@@ -15,6 +15,7 @@
         android:layout_centerHorizontal="true"
         android:layout_centerVertical="true"
         android:orientation="vertical">
+
         <ListView
             android:id="@+id/list"
             android:layout_width="wrap_content"
@@ -29,16 +30,10 @@
             android:padding="20dp">
 
             <Button
-                android:id="@+id/conectar"
+                android:id="@+id/boton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/conectar" />
-
-            <Button
-                android:id="@+id/desconectar"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Desconectar" />
+                android:text="@string/hablar" />
         </LinearLayout>
 
     <TextView

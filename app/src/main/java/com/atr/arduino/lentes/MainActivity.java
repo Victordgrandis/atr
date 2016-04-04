@@ -18,36 +18,51 @@ import android.widget.Button;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
-
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.UUID;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class MainActivity extends Activity {
-    // App Variables
+    /**
+     * Variables correspondientes a las vistas
+     */
     TextView Conectado, Distancia;
-    Button conectarButton, desconectarButton;
-    ArrayList<String> Datos;
-    Float promedio, error;
-    String distancia;
+    Button Boton;
     public ListView mList;
-    boolean listo= true;
-    // Sonido
+
+    /**
+     * Sonido
+     */
+    boolean listo= true; // Inicialización del sonido
     SoundPool soundPool;
-    int soundID;
-    // Bluetooth variables
+    int soundID; // Almacenamiento de sonidos desde /raw
+
+    /**
+     * Variables Bluetooth
+     */
     BluetoothAdapter btAdapter;
     BluetoothSocket btSocket;
-    OutputStream mmOutputStream;
     InputStream mmInputStream;
+
+    /**
+     * Hilos
+     */
     Thread workerThread, alertaThread;
+    volatile boolean stopWorker;
+
+    /**
+     * Almacenamiento de datos
+     */
+    ArrayList<String> Datos;
     byte[] readBuffer;
     int readBufferPosition;
-    volatile boolean stopWorker;
+
+    /**
+     * Constantes
+     */
     private static final UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
     private static final String address = "30:14:06:26:01:02";
     private static final String tag = "MainActivity";
@@ -61,21 +76,19 @@ public class MainActivity extends Activity {
 
         Conectado = (TextView) findViewById(R.id.conectado);
         Distancia = (TextView) findViewById(R.id.distancia);
-        conectarButton = (Button) findViewById(R.id.conectar);
-        desconectarButton = (Button) findViewById(R.id.desconectar);
+        Boton = (Button) findViewById(R.id.boton);
         mList = (ListView) findViewById(R.id.list);
         Datos = new ArrayList<>();
         inicializarSonido();
 
-        try
-        {
-            findBT();
-            openBT();
+        try {
+            buscarBT();
+            conectarBT();
         } catch (IOException ex) {
             Log.e(tag, "Error al conectar dispositivo bluetooth");
         }
 
-        conectarButton.setOnClickListener(new View.OnClickListener() {
+        Boton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 startVoiceRecognitionActivity();
 /*
@@ -88,25 +101,15 @@ public class MainActivity extends Activity {
 */
             }
         });
-
-        desconectarButton.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-
-                try {
-                    closeBT();
-                } catch (IOException ex) {
-                    Log.e(tag, "Error al desconectar dispositivo bluetooth");
-                }
-
-            }
-        });
     }
 
+    /**
+     * Métodos de control del Bluetooth
+     */
 
-    private void findBT() {
+    private void buscarBT() {
+        // Inicializa el adaptador de bluetooth
         btAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (btAdapter == null) {
-        }
 
         if (!btAdapter.isEnabled()) {
             Intent enableBluetooth = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
@@ -114,11 +117,11 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void openBT() throws IOException {
+    private void conectarBT() throws IOException {
+        // Conecta el socket de bluetooth
         BluetoothDevice device = btAdapter.getRemoteDevice(address);
         btSocket = device.createInsecureRfcommSocketToServiceRecord(uuid);
         btSocket.connect();
-        mmOutputStream = btSocket.getOutputStream();
         mmInputStream = btSocket.getInputStream();
         Conectado.setText(R.string.conectado);
         Conectado.setTextColor(getResources().getColor(R.color.green));
@@ -126,11 +129,25 @@ public class MainActivity extends Activity {
         alertar();
     }
 
+    void cerrarBT() throws IOException {
+        // Finaliza la conexión bluetooth
+        stopWorker = true;
+        mmInputStream.close();
+        btSocket.close();
+        Conectado.setText(R.string.desconectado);
+        Conectado.setTextColor(getResources().getColor(R.color.red));
+    }
+
+    /**
+     * Métodos de escucha del flujo de datos por bluetooth y su almacenamiento
+     */
+
     private void escucharDatos() {
+        // Recibe el flujo de datos por bluetooth
         final Handler handler = new Handler();
         final byte delimiter = 10; //This is the ASCII code for a newline character
 
-        stopWorker = false;
+        stopWorker = false; // Continúe ejecutando
         readBufferPosition = 0;
         readBuffer = new byte[1024];
         workerThread = new Thread(new Runnable() {
@@ -167,33 +184,26 @@ public class MainActivity extends Activity {
 
         workerThread.start();
     }
-    void alertar(){
-        final int[] cont = {0};
-        final Float[] dato = {Float.valueOf(0)};
-        alertaThread = new Thread(new Runnable() {
-            public void run() {
-                while(!Thread.currentThread().isInterrupted() && btSocket.isConnected()) {
-                    try {
-                        alertaProximidad();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
+
+    @SuppressLint("SetTextI18n")
+    void almacenarDatos(final String distancia) {
+        // Guarda los datos que llegan por bluetooth en un arrayList
+        Datos.add(distancia);
+        Distancia.setText("Distancia: " + distancia);
+        if (Datos.size() > 100) {
+            // Limpieza del arrayList
+            for (int i = 0; i < 50; i++) {
+                Datos.remove(i);
             }
-        });
-        alertaThread.start();
+        }
     }
 
-    void closeBT() throws IOException {
-        stopWorker = true;
-        mmOutputStream.close();
-        mmInputStream.close();
-        btSocket.close();
-        Conectado.setText(R.string.desconectado);
-        Conectado.setTextColor(getResources().getColor(R.color.red));
-    }
+    /**
+     * Métodos de manejo de las alertas de sonido
+     */
 
     void inicializarSonido() {
+        // Seteo inicial de parámetros de la librería SoundPool para alertas por sonido
         AudioAttributes audioAttributes = new AudioAttributes.Builder()
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build();
@@ -208,93 +218,109 @@ public class MainActivity extends Activity {
         });
     }
 
-    @SuppressLint("SetTextI18n")
-    void almacenarDatos(final String distancia) {
-        Datos.add(distancia);
-        Distancia.setText("Distancia: " + distancia);
-        if (Datos.size() > 50) { // Limpieza del arrayList
-            for (int i = 0; i < 20; i++) {
-                Datos.remove(i);
+    void alertar(){
+        // Hilo que escucha ininterrumpidamente el último dato obtenido y alerta la proximidad
+        alertaThread = new Thread(new Runnable() {
+            public void run() {
+                while(!Thread.currentThread().isInterrupted() && btSocket.isConnected()) {
+                    try {
+                        alertaProximidad();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
             }
-        }
+        });
+        alertaThread.start();
     }
 
-    void alertaProximidad() throws InterruptedException { // Aviso de proximidad por sonido
-        Lock lock = new ReentrantLock();
-        if(Datos.size()>1) {
-            int d1 = (int) Math.ceil(Float.parseFloat(Datos.get(Datos.size() - 1)) / 10);
+    void alertaProximidad() throws InterruptedException {
+        // Avisa proximidad por sonido
+        Lock lock = new ReentrantLock(); // Cerrojo de control de concurrencia
+        if(Datos.size() > 1 && Datos.size() < 99) {
+            int d = (int) Math.ceil(Float.parseFloat(Datos.get(Datos.size() - 1)) / 10); // Redondeo hacia arriba de la distancia
             if (lock.tryLock()) {
                 try {
-                    switch (d1) {
-                        case 1: {
+                    switch (d) {
+                        case 1: { // Distancia < 10cm
                             sonar(20);
                             break;
                         }
-                        case 2: {
+                        case 2: { // 10cm < Distancia < 20cm
                             sonar(300);
                             break;
                         }
-                        case 3: {
+                        case 3: { // 20cm < Distancia < 30cm
                             sonar(400);
                             break;
                         }
-                        case 4: {
+                        case 4: { // 30cm < Distancia < 40cm
                             sonar(600);
                             break;
                         }
-                        case 5: case 6: {
+                        case 5: case 6: { // 40cm < Distancia < 60cm
                             sonar(800);
                             break;
                         }
-                        case 7: case 8: {
+                        case 7: case 8: { // 60cm < Distancia < 80cm
                             sonar(1000);
                             break;
                         }
                     }
                 } finally {
-                    lock.unlock();
+                    lock.unlock(); // Libera el cerrojo
                 }
             }
         }
     }
 
     void sonar(long t) throws InterruptedException {
+        // Si el sonido está correctamente inicializado lo lanza y duerme el hilo
         if (listo) {
             soundPool.play(soundID, 0.5f, 0.5f, 1, 0, 1f);
             Thread.sleep(t);
         }
     }
 
+    /**
+     * Métodos de reconocimiento de voz
+     */
+
     public void startVoiceRecognitionActivity() {
+        // Llama a la aplicación de reconocimiento de voz del dispositivo
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE,"es");
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "es");
         startActivityForResult(intent, VOICE_RECOGNITION_REQUEST_CODE);
     }
 
-
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        // Recibe respuesta de la aplicación de reconocimiento de voz del dispositivo
         super.onActivityResult(requestCode, resultCode, data);
 
         if (requestCode == VOICE_RECOGNITION_REQUEST_CODE && resultCode == RESULT_OK) {
-            ArrayList matches = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
-            if(!matches.isEmpty()){
-                mList.setAdapter(new ArrayAdapter(this, android.R.layout.simple_list_item_1, matches));
+            // Respuesta correcta
+            ArrayList<String> resultados = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS); // ArrayList donde almacenar las palabras interpretadas
+            if(!resultados.isEmpty()){
+                mList.setAdapter(new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, resultados)); // Muestra matches en ListView
 
-                if (matches.contains("conectar")) {
-                    if(btSocket.isConnected()) {
+                /**
+                 * Acciones lanzadas por comando de voz
+                 */
+                if (resultados.contains("conectar")) {
+                    //if(btSocket.isConnected()) {
                         try {
-                            findBT();
-                            openBT();
+                            buscarBT();
+                            conectarBT();
                         } catch (IOException ex) {
                             Log.e(tag, "Error al conectar dispositivo bluetooth");
                         }
-                    } else Toast.makeText(this, "Bluetooth ya conectado", Toast.LENGTH_SHORT).show();
-                } else if (matches.contains("desconectar")) {
+                    //} else Toast.makeText(this, "Bluetooth ya conectado", Toast.LENGTH_SHORT).show();
+                } else if (resultados.contains("desconectar")) {
                     if(btSocket.isConnected()) {
                         try {
-                            closeBT();
+                            cerrarBT();
                         } catch (IOException ex) {
                             Log.e(tag, "Error al desconectar dispositivo bluetooth");
                         }

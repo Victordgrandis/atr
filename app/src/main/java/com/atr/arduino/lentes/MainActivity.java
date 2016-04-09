@@ -13,6 +13,7 @@ import android.os.Handler;
 import android.speech.RecognizerIntent;
 import android.speech.tts.TextToSpeech;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -39,6 +40,7 @@ public class MainActivity extends Activity {
      * Sonido
      */
     boolean listo= true; // Inicialización del sonido
+    boolean silenciar = false;
     SoundPool soundPool;
     int soundID; // Almacenamiento de sonidos desde /raw
     private TextToSpeech mTts;
@@ -70,7 +72,7 @@ public class MainActivity extends Activity {
     private static final String address = "30:14:06:26:01:02";
     private static final String tag = "MainActivity";
     public static final int VOICE_RECOGNITION_REQUEST_CODE = 1234;
-    public static final int CHECK_CODE = 1111;
+    public static final int TTS_CHECK_CODE = 1111;
 
 
     @Override
@@ -94,9 +96,26 @@ public class MainActivity extends Activity {
 */
         Boton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                startVoiceRecognitionActivity();
+/*
+                try {
+                    buscarBT();
+                    conectarBT();
+                } catch (IOException ex) {
+                    Log.e(tag, "Error al conectar dispositivo bluetooth");
+                }
+*/
             }
         });
+    }
+    @Override
+    public boolean onKeyDown(int keycode, KeyEvent e) {
+        switch(keycode) {
+            case KeyEvent.KEYCODE_HEADSETHOOK:
+                startVoiceRecognitionActivity();
+                return true;
+        }
+
+        return super.onKeyDown(keycode, e);
     }
 
     /**
@@ -222,7 +241,7 @@ public class MainActivity extends Activity {
         });
         Intent checkIntent = new Intent();
         checkIntent.setAction(TextToSpeech.Engine.ACTION_CHECK_TTS_DATA);
-        startActivityForResult(checkIntent, CHECK_CODE);
+        startActivityForResult(checkIntent, TTS_CHECK_CODE);
     }
 
     void alertar(){
@@ -242,40 +261,51 @@ public class MainActivity extends Activity {
     }
 
     void alertaProximidad() throws InterruptedException {
-        // Avisa proximidad por sonido
+        // Avisa proximidad por sonido o TTS
         Lock lock = new ReentrantLock(); // Cerrojo de control de concurrencia
-        if(Datos.size() > 1 && Datos.size() < 99) {
-            int d = (int) Math.ceil(Float.parseFloat(Datos.get(Datos.size() - 1)) / 10); // Redondeo hacia arriba de la distancia
+        if (Datos.size() > 1) {
             if (lock.tryLock()) {
                 try {
-                    switch (d) {
-                        case 1: { // Distancia < 10cm
-                            sonar(20);
-                            break;
+                    if (Float.parseFloat(Datos.get(Datos.size() - 1)) < 100) {
+                        // A corta distancia avisa por sonido
+                        int d = (int) Math.ceil(Float.parseFloat(Datos.get(Datos.size() - 1)) / 10); // Redondeo hacia arriba de la distancia
+                        switch (d) {
+                            case 1: { // Distancia < 10cm
+                                sonar(20);
+                                break;
+                            }
+                            case 2: { // 10cm < Distancia < 20cm
+                                sonar(300);
+                                break;
+                            }
+                            case 3: { // 20cm < Distancia < 30cm
+                                sonar(400);
+                                break;
+                            }
+                            case 4: { // 30cm < Distancia < 40cm
+                                sonar(600);
+                                break;
+                            }
+                            case 5:
+                            case 6: { // 40cm < Distancia < 60cm
+                                sonar(800);
+                                break;
+                            }
+                            case 7:
+                            case 8: { // 60cm < Distancia < 80cm
+                                sonar(1000);
+                                break;
+                            }
+                            case 9:
+                            case 10: { // 80cm < Distancia < 100cm
+                                sonar(2000);
+                                break;
+                            }
                         }
-                        case 2: { // 10cm < Distancia < 20cm
-                            sonar(300);
-                            break;
-                        }
-                        case 3: { // 20cm < Distancia < 30cm
-                            sonar(400);
-                            break;
-                        }
-                        case 4: { // 30cm < Distancia < 40cm
-                            sonar(600);
-                            break;
-                        }
-                        case 5: case 6: { // 40cm < Distancia < 60cm
-                            sonar(800);
-                            break;
-                        }
-                        case 7: case 8: case 9: { // 60cm < Distancia < 90cm
-                            sonar(1000);
-                            break;
-                        }
-                        case 10: {
+                    } else {
+                        // A mayor distancia avisa por TTS
+                        if (Math.ceil(Float.parseFloat(Datos.get(Datos.size() - 1)) / 10) == Math.ceil(Float.parseFloat(Datos.get(Datos.size() - 2)) / 10))
                             avisoVoz(String.valueOf(Math.round(Float.parseFloat(Datos.get(Datos.size() - 1)))));
-                        }
                     }
                 } finally {
                     lock.unlock(); // Libera el cerrojo
@@ -286,21 +316,26 @@ public class MainActivity extends Activity {
 
     void sonar(long t) throws InterruptedException {
         // Si el sonido está correctamente inicializado lo lanza y duerme el hilo
-        if (listo) {
-            soundPool.play(soundID, 0.5f, 0.5f, 1, 0, 1f);
-            Thread.sleep(t);
+        if(!silenciar) {
+            if (listo) {
+                soundPool.play(soundID, 0.5f, 0.5f, 1, 0, 1f);
+                Thread.sleep(t);
+            }
         }
     }
 
     void avisoVoz(String texto) throws InterruptedException {
-        mTts.speak(texto, TextToSpeech.QUEUE_FLUSH, null);
-        while(mTts.isSpeaking()){
-            // Espera a que termine de hablar
+        // Informa por voz la distancia del objeto
+        if (!silenciar) {
+            mTts.speak(texto, TextToSpeech.QUEUE_FLUSH, null, null);
+            while (mTts.isSpeaking()) {
+                // Espera a que termine de hablar
+            }
         }
     }
 
     /**
-     * Métodos de reconocimiento de voz
+     * Métodos de reconocimiento de voz y TTS
      */
 
     public void startVoiceRecognitionActivity() {
@@ -317,7 +352,9 @@ public class MainActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
 
         if (requestCode == VOICE_RECOGNITION_REQUEST_CODE && resultCode == RESULT_OK) {
-            // Respuesta correcta
+            /**
+             * Respuesta Intent reconocimiento de voz
+             */
             ArrayList<String> resultados = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS); // ArrayList donde almacenar las palabras interpretadas
             if(!resultados.isEmpty()){
                 mList.setAdapter(new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, resultados)); // Muestra matches en ListView
@@ -326,25 +363,40 @@ public class MainActivity extends Activity {
                  * Acciones lanzadas por comando de voz
                  */
                 if (resultados.contains("conectar")) {
-                        try {
-                            buscarBT();
-                            conectarBT();
-                        } catch (IOException ex) {
-                            Log.e(tag, "Error al conectar dispositivo bluetooth");
-                        }
+                    try {
+                        buscarBT();
+                        conectarBT();
+                    } catch (IOException ex) {
+                        Log.e(tag, "Error al conectar dispositivo bluetooth");
+                    }
                 } else if (resultados.contains("desconectar")) {
-                    if(btSocket.isConnected()) {
-                        try {
-                            cerrarBT();
-                        } catch (IOException ex) {
-                            Log.e(tag, "Error al desconectar dispositivo bluetooth");
-                        }
-                    } else Toast.makeText(this, "Bluetooth no conectado", Toast.LENGTH_SHORT).show();
+                    try {
+                        cerrarBT();
+                    } catch (IOException ex) {
+                        Log.e(tag, "Error al desconectar dispositivo bluetooth");
+                    }
+                } else if (resultados.contains("activar")){
+                    silenciar = false;
+                    try {
+                        avisoVoz("Activado");
+                    } catch (InterruptedException e) {
+                        Log.e(tag, "Error al activar sonido");
+                    }
+                } else if (resultados.contains("silenciar")){
+                    silenciar = true;
+                    try {
+                        avisoVoz("Silenciado");
+                    } catch (InterruptedException e) {
+                        Log.e(tag, "Error al silenciar sonido");
+                    }
                 }
             }
-        } else if (requestCode == CHECK_CODE) {
+        } else if (requestCode == TTS_CHECK_CODE) {
+            /**
+             * Respuesta Intent inicialización TTS
+             */
             if (resultCode == TextToSpeech.Engine.CHECK_VOICE_DATA_PASS) {
-                // success, create the TTS instance
+                // Inicializa el TTS
                 mTts = new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
                     @Override
                     public void onInit(int status) {
@@ -352,7 +404,7 @@ public class MainActivity extends Activity {
                     }
                 });
             } else {
-                // missing data, install it
+                // Instala datos faltantes del TTS
                 Intent installIntent = new Intent();
                 installIntent.setAction(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA);
                 startActivity(installIntent);

@@ -11,6 +11,7 @@ import android.media.SoundPool;
 import android.os.Bundle;
 import android.os.Handler;
 import android.speech.RecognizerIntent;
+import android.speech.tts.TextToSpeech;
 import android.util.Log;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -21,6 +22,7 @@ import android.widget.Toast;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -39,6 +41,7 @@ public class MainActivity extends Activity {
     boolean listo= true; // Inicialización del sonido
     SoundPool soundPool;
     int soundID; // Almacenamiento de sonidos desde /raw
+    private TextToSpeech mTts;
 
     /**
      * Variables Bluetooth
@@ -67,6 +70,7 @@ public class MainActivity extends Activity {
     private static final String address = "30:14:06:26:01:02";
     private static final String tag = "MainActivity";
     public static final int VOICE_RECOGNITION_REQUEST_CODE = 1234;
+    public static final int CHECK_CODE = 1111;
 
 
     @Override
@@ -80,25 +84,17 @@ public class MainActivity extends Activity {
         mList = (ListView) findViewById(R.id.list);
         Datos = new ArrayList<>();
         inicializarSonido();
-
+/*
         try {
             buscarBT();
             conectarBT();
         } catch (IOException ex) {
             Log.e(tag, "Error al conectar dispositivo bluetooth");
         }
-
+*/
         Boton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 startVoiceRecognitionActivity();
-/*
-                try {
-                    findBT();
-                    openBT();
-                } catch (IOException ex) {
-                    Log.e(tag, "Error al conectar dispositivo bluetooth");
-                }
-*/
             }
         });
     }
@@ -125,6 +121,11 @@ public class MainActivity extends Activity {
         mmInputStream = btSocket.getInputStream();
         Conectado.setText(R.string.conectado);
         Conectado.setTextColor(getResources().getColor(R.color.green));
+        try {
+            avisoVoz("Conectado");
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         escucharDatos();
         alertar();
     }
@@ -136,6 +137,11 @@ public class MainActivity extends Activity {
         btSocket.close();
         Conectado.setText(R.string.desconectado);
         Conectado.setTextColor(getResources().getColor(R.color.red));
+        try {
+            avisoVoz("Desconectado");
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -190,11 +196,9 @@ public class MainActivity extends Activity {
         // Guarda los datos que llegan por bluetooth en un arrayList
         Datos.add(distancia);
         Distancia.setText("Distancia: " + distancia);
-        if (Datos.size() > 100) {
+        if (Datos.size() > 50) {
             // Limpieza del arrayList
-            for (int i = 0; i < 50; i++) {
-                Datos.remove(i);
-            }
+            Datos.remove(1);
         }
     }
 
@@ -216,6 +220,9 @@ public class MainActivity extends Activity {
                 listo = true;
             }
         });
+        Intent checkIntent = new Intent();
+        checkIntent.setAction(TextToSpeech.Engine.ACTION_CHECK_TTS_DATA);
+        startActivityForResult(checkIntent, CHECK_CODE);
     }
 
     void alertar(){
@@ -262,9 +269,12 @@ public class MainActivity extends Activity {
                             sonar(800);
                             break;
                         }
-                        case 7: case 8: { // 60cm < Distancia < 80cm
+                        case 7: case 8: case 9: { // 60cm < Distancia < 90cm
                             sonar(1000);
                             break;
+                        }
+                        case 10: {
+                            avisoVoz(String.valueOf(Math.round(Float.parseFloat(Datos.get(Datos.size() - 1)))));
                         }
                     }
                 } finally {
@@ -279,6 +289,13 @@ public class MainActivity extends Activity {
         if (listo) {
             soundPool.play(soundID, 0.5f, 0.5f, 1, 0, 1f);
             Thread.sleep(t);
+        }
+    }
+
+    void avisoVoz(String texto) throws InterruptedException {
+        mTts.speak(texto, TextToSpeech.QUEUE_FLUSH, null);
+        while(mTts.isSpeaking()){
+            // Espera a que termine de hablar
         }
     }
 
@@ -309,14 +326,12 @@ public class MainActivity extends Activity {
                  * Acciones lanzadas por comando de voz
                  */
                 if (resultados.contains("conectar")) {
-                    //if(btSocket.isConnected()) {
                         try {
                             buscarBT();
                             conectarBT();
                         } catch (IOException ex) {
                             Log.e(tag, "Error al conectar dispositivo bluetooth");
                         }
-                    //} else Toast.makeText(this, "Bluetooth ya conectado", Toast.LENGTH_SHORT).show();
                 } else if (resultados.contains("desconectar")) {
                     if(btSocket.isConnected()) {
                         try {
@@ -326,6 +341,21 @@ public class MainActivity extends Activity {
                         }
                     } else Toast.makeText(this, "Bluetooth no conectado", Toast.LENGTH_SHORT).show();
                 }
+            }
+        } else if (requestCode == CHECK_CODE) {
+            if (resultCode == TextToSpeech.Engine.CHECK_VOICE_DATA_PASS) {
+                // success, create the TTS instance
+                mTts = new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
+                    @Override
+                    public void onInit(int status) {
+                        mTts.setLanguage(Locale.getDefault());
+                    }
+                });
+            } else {
+                // missing data, install it
+                Intent installIntent = new Intent();
+                installIntent.setAction(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA);
+                startActivity(installIntent);
             }
         }
     }

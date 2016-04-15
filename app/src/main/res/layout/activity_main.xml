@@ -36,12 +36,12 @@
                 android:text="@string/hablar" />
         </LinearLayout>
 
-    <TextView
+    <!--<TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/distancia"
         android:id="@+id/distancia"
-        android:layout_gravity="center"/>
+        android:layout_gravity="center"/>-->
     </LinearLayout>
 
     <TextView

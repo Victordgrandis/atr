@@ -70,7 +70,7 @@ public class MainActivity extends Activity {
      */
     private static final UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
     private static final String address = "30:14:06:26:01:02";
-    private static final String tag = "MainActivity";
+    private static final String tag = "alertaProximidad";
     public static final int VOICE_RECOGNITION_REQUEST_CODE = 1234;
     public static final int TTS_CHECK_CODE = 1111;
 
@@ -81,7 +81,7 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
 
         Conectado = (TextView) findViewById(R.id.conectado);
-        Distancia = (TextView) findViewById(R.id.distancia);
+        //Distancia = (TextView) findViewById(R.id.distancia);
         Boton = (Button) findViewById(R.id.boton);
         mList = (ListView) findViewById(R.id.list);
         Datos = new ArrayList<>();
@@ -96,6 +96,7 @@ public class MainActivity extends Activity {
 */
         Boton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
+                startVoiceRecognitionActivity();
 /*
                 try {
                     buscarBT();
@@ -214,8 +215,7 @@ public class MainActivity extends Activity {
     void almacenarDatos(final String distancia) {
         // Guarda los datos que llegan por bluetooth en un arrayList
         Datos.add(distancia);
-        Distancia.setText("Distancia: " + distancia);
-        if (Datos.size() > 50) {
+        if (Datos.size() > 1000) {
             // Limpieza del arrayList
             Datos.remove(1);
         }
@@ -262,50 +262,71 @@ public class MainActivity extends Activity {
 
     void alertaProximidad() throws InterruptedException {
         // Avisa proximidad por sonido o TTS
+        int sensor;
+        Float distancia;
+        Float anteriorIzq = 0f, anteriorDer = 0f;
         Lock lock = new ReentrantLock(); // Cerrojo de control de concurrencia
         if (Datos.size() > 1) {
+            if(Float.parseFloat(Datos.get(Datos.size() - 1))>2000){
+                distancia = Float.parseFloat(Datos.get(Datos.size() - 1)) - 2000f;
+                Log.d(tag,"Izquierda: " +distancia);
+                sensor = 2;
+            } else {
+                distancia = Float.parseFloat(Datos.get(Datos.size() - 1)) - 1000f;
+                Log.d(tag,"Derecha: " +distancia);
+                sensor = 1;
+            }
             if (lock.tryLock()) {
                 try {
-                    if (Float.parseFloat(Datos.get(Datos.size() - 1)) < 100) {
+                    if (distancia < 100) {
                         // A corta distancia avisa por sonido
-                        int d = (int) Math.ceil(Float.parseFloat(Datos.get(Datos.size() - 1)) / 10); // Redondeo hacia arriba de la distancia
+                        int d = (int) Math.ceil(distancia / 10); // Redondeo hacia arriba de la distancia
                         switch (d) {
                             case 1: { // Distancia < 10cm
-                                sonar(20);
+                                sonar(20,sensor);
                                 break;
                             }
                             case 2: { // 10cm < Distancia < 20cm
-                                sonar(300);
+                                sonar(300,sensor);
                                 break;
                             }
                             case 3: { // 20cm < Distancia < 30cm
-                                sonar(400);
+                                sonar(400,sensor);
                                 break;
                             }
                             case 4: { // 30cm < Distancia < 40cm
-                                sonar(600);
+                                sonar(600,sensor);
                                 break;
                             }
                             case 5:
                             case 6: { // 40cm < Distancia < 60cm
-                                sonar(800);
+                                sonar(800,sensor);
                                 break;
                             }
                             case 7:
                             case 8: { // 60cm < Distancia < 80cm
-                                sonar(1000);
+                                sonar(1000,sensor);
                                 break;
                             }
                             case 9:
                             case 10: { // 80cm < Distancia < 100cm
-                                sonar(2000);
+                                sonar(2000,sensor);
                                 break;
                             }
                         }
                     } else {
                         // A mayor distancia avisa por TTS
-                        if (Math.ceil(Float.parseFloat(Datos.get(Datos.size() - 1)) / 10) == Math.ceil(Float.parseFloat(Datos.get(Datos.size() - 2)) / 10))
-                            avisoVoz(String.valueOf(Math.round(Float.parseFloat(Datos.get(Datos.size() - 1)))));
+                        if(sensor == 1){
+                            if(Math.ceil(distancia/10) == Math.ceil(anteriorDer/10)){
+                                avisoVoz(String.valueOf(Math.round(distancia)) + " por derecha");
+                            }
+                            anteriorDer = distancia;
+                        } else {
+                            if(Math.ceil(distancia/10) == Math.ceil(anteriorIzq/10)){
+                                avisoVoz(String.valueOf(Math.round(distancia)) + " por izquierda");
+                            }
+                            anteriorIzq = distancia;
+                        }
                     }
                 } finally {
                     lock.unlock(); // Libera el cerrojo
@@ -314,11 +335,15 @@ public class MainActivity extends Activity {
         }
     }
 
-    void sonar(long t) throws InterruptedException {
+    void sonar(long t, int sensor) throws InterruptedException {
         // Si el sonido está correctamente inicializado lo lanza y duerme el hilo
         if(!silenciar) {
             if (listo) {
-                soundPool.play(soundID, 0.5f, 0.5f, 1, 0, 1f);
+                if(sensor == 1){
+                    soundPool.play(soundID, 0.5f, 0.5f, 1, 0, 1f);
+                } else {
+                    soundPool.play(soundID, 0.5f, 0.5f, 1, 0, 1f);
+                }
                 Thread.sleep(t);
             }
         }

@@ -19,7 +19,6 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ListView;
 import android.widget.TextView;
-import android.widget.Toast;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -30,10 +29,10 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class MainActivity extends Activity {
     /**
-     * Variables correspondientes a las vistas
+     * Variables de vistas
      */
     TextView Conectado, Distancia;
-    Button Boton;
+    Button botonConectar, botonSilenciar, botonDesconectar, botonActivar;
     public ListView mList;
 
     /**
@@ -55,8 +54,9 @@ public class MainActivity extends Activity {
     /**
      * Hilos
      */
-    Thread workerThread, alertaThread;
+    Thread btThread, alertaThread;
     volatile boolean stopWorker;
+    boolean cerca = false;
 
     /**
      * Almacenamiento de datos
@@ -64,15 +64,15 @@ public class MainActivity extends Activity {
     ArrayList<String> Datos;
     byte[] readBuffer;
     int readBufferPosition;
-
+    Float anteriorIzq = 0f, anteriorDer = 0f;
     /**
      * Constantes
      */
     private static final UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
-    private static final String address = "30:14:06:26:01:02";
+    private static final String address = "98:D3:37:00:82:B3";
     private static final String tag = "alertaProximidad";
-    public static final int VOICE_RECOGNITION_REQUEST_CODE = 1234;
-    public static final int TTS_CHECK_CODE = 1111;
+    public static final int RECONOCIMIENTO_VOZ = 1234;
+    public static final int TTS = 1111;
 
 
     @Override
@@ -82,8 +82,10 @@ public class MainActivity extends Activity {
 
         Conectado = (TextView) findViewById(R.id.conectado);
         //Distancia = (TextView) findViewById(R.id.distancia);
-        Boton = (Button) findViewById(R.id.boton);
-        mList = (ListView) findViewById(R.id.list);
+        botonConectar = (Button) findViewById(R.id.botonConectar);
+        botonDesconectar = (Button) findViewById(R.id.botonDesconectar);
+        botonSilenciar = (Button) findViewById(R.id.botonSilencio);
+        botonActivar = (Button) findViewById(R.id.botonActivar);
         Datos = new ArrayList<>();
         inicializarSonido();
 /*
@@ -94,17 +96,43 @@ public class MainActivity extends Activity {
             Log.e(tag, "Error al conectar dispositivo bluetooth");
         }
 */
-        Boton.setOnClickListener(new View.OnClickListener() {
+
+        botonConectar.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                startVoiceRecognitionActivity();
-/*
+                //reconocerVoz();
                 try {
                     buscarBT();
                     conectarBT();
                 } catch (IOException ex) {
                     Log.e(tag, "Error al conectar dispositivo bluetooth");
                 }
-*/
+
+            }
+        });
+
+        botonDesconectar.setOnClickListener(new View.OnClickListener()
+        {
+            public void onClick(View v)
+            {
+                try
+                {
+                    cerrarBT();
+                }
+                catch (IOException ex) { }
+            }
+        });
+
+        botonSilenciar.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                silenciar = true;
+
+            }
+        });
+
+        botonActivar.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                silenciar = false;
+
             }
         });
     }
@@ -112,7 +140,8 @@ public class MainActivity extends Activity {
     public boolean onKeyDown(int keycode, KeyEvent e) {
         switch(keycode) {
             case KeyEvent.KEYCODE_HEADSETHOOK:
-                startVoiceRecognitionActivity();
+            case KeyEvent.KEYCODE_MENU:
+                reconocerVoz();
                 return true;
         }
 
@@ -176,7 +205,7 @@ public class MainActivity extends Activity {
         stopWorker = false; // Continúe ejecutando
         readBufferPosition = 0;
         readBuffer = new byte[1024];
-        workerThread = new Thread(new Runnable() {
+        btThread = new Thread(new Runnable() {
             public void run() {
                 while (!Thread.currentThread().isInterrupted() && !stopWorker) {
                     try {
@@ -208,7 +237,7 @@ public class MainActivity extends Activity {
             }
         });
 
-        workerThread.start();
+        btThread.start();
     }
 
     @SuppressLint("SetTextI18n")
@@ -239,9 +268,9 @@ public class MainActivity extends Activity {
                 listo = true;
             }
         });
-        Intent checkIntent = new Intent();
-        checkIntent.setAction(TextToSpeech.Engine.ACTION_CHECK_TTS_DATA);
-        startActivityForResult(checkIntent, TTS_CHECK_CODE);
+        Intent intent = new Intent();
+        intent.setAction(TextToSpeech.Engine.ACTION_CHECK_TTS_DATA);
+        startActivityForResult(intent, TTS);
     }
 
     void alertar(){
@@ -264,18 +293,29 @@ public class MainActivity extends Activity {
         // Avisa proximidad por sonido o TTS
         int sensor;
         Float distancia;
-        Float anteriorIzq = 0f, anteriorDer = 0f;
-        Lock lock = new ReentrantLock(); // Cerrojo de control de concurrencia
+        ReentrantLock lock = new ReentrantLock(); // Cerrojo de control de concurrencia
         if (Datos.size() > 1) {
-            if(Float.parseFloat(Datos.get(Datos.size() - 1))>2000){
+            if(Float.parseFloat(Datos.get(Datos.size() - 1)) > 2000){
+                // Sensor izquierdo
                 distancia = Float.parseFloat(Datos.get(Datos.size() - 1)) - 2000f;
                 Log.d(tag,"Izquierda: " +distancia);
                 sensor = 2;
             } else {
+                // Sensor derecho
                 distancia = Float.parseFloat(Datos.get(Datos.size() - 1)) - 1000f;
                 Log.d(tag,"Derecha: " +distancia);
                 sensor = 1;
             }
+
+            /* Siempre devuelve falso
+            if(lock.isHeldByCurrentThread()){
+                Log.d(tag, "Lock held by current thread");
+                if(Math.ceil(distancia/20) != Math.ceil(anteriorIzq/20) || Math.ceil(distancia/20) != Math.ceil(anteriorDer/20)){
+                    lock.unlock();
+                    Log.d(tag, "Desbloqueado por: "+distancia);
+                }
+            }*/
+
             if (lock.tryLock()) {
                 try {
                     if (distancia < 100) {
@@ -318,12 +358,12 @@ public class MainActivity extends Activity {
                         // A mayor distancia avisa por TTS
                         if(sensor == 1){
                             if(Math.ceil(distancia/10) == Math.ceil(anteriorDer/10)){
-                                avisoVoz(String.valueOf(Math.round(distancia)) + " por derecha");
+                                avisoVoz(String.valueOf(Math.round(distancia)) + " derecha");
                             }
                             anteriorDer = distancia;
                         } else {
                             if(Math.ceil(distancia/10) == Math.ceil(anteriorIzq/10)){
-                                avisoVoz(String.valueOf(Math.round(distancia)) + " por izquierda");
+                                avisoVoz(String.valueOf(Math.round(distancia)) + " izquierda");
                             }
                             anteriorIzq = distancia;
                         }
@@ -340,9 +380,9 @@ public class MainActivity extends Activity {
         if(!silenciar) {
             if (listo) {
                 if(sensor == 1){
-                    soundPool.play(soundID, 0.5f, 0.5f, 1, 0, 1f);
+                    soundPool.play(soundID, 0.0f, 0.5f, 1, 0, 1f);
                 } else {
-                    soundPool.play(soundID, 0.5f, 0.5f, 1, 0, 1f);
+                    soundPool.play(soundID, 0.5f, 0.0f, 1, 0, 1f);
                 }
                 Thread.sleep(t);
             }
@@ -363,12 +403,12 @@ public class MainActivity extends Activity {
      * Métodos de reconocimiento de voz y TTS
      */
 
-    public void startVoiceRecognitionActivity() {
+    public void reconocerVoz() {
         // Llama a la aplicación de reconocimiento de voz del dispositivo
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "es");
-        startActivityForResult(intent, VOICE_RECOGNITION_REQUEST_CODE);
+        startActivityForResult(intent, RECONOCIMIENTO_VOZ);
     }
 
     @Override
@@ -376,13 +416,12 @@ public class MainActivity extends Activity {
         // Recibe respuesta de la aplicación de reconocimiento de voz del dispositivo
         super.onActivityResult(requestCode, resultCode, data);
 
-        if (requestCode == VOICE_RECOGNITION_REQUEST_CODE && resultCode == RESULT_OK) {
+        if (requestCode == RECONOCIMIENTO_VOZ && resultCode == RESULT_OK) {
             /**
              * Respuesta Intent reconocimiento de voz
              */
             ArrayList<String> resultados = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS); // ArrayList donde almacenar las palabras interpretadas
             if(!resultados.isEmpty()){
-                mList.setAdapter(new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, resultados)); // Muestra matches en ListView
 
                 /**
                  * Acciones lanzadas por comando de voz
@@ -416,7 +455,7 @@ public class MainActivity extends Activity {
                     }
                 }
             }
-        } else if (requestCode == TTS_CHECK_CODE) {
+        } else if (requestCode == TTS) {
             /**
              * Respuesta Intent inicialización TTS
              */

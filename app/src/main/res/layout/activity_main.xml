@@ -8,40 +8,84 @@
     android:paddingTop="@dimen/activity_vertical_margin"
     tools:context="com.atr.arduino.lentes.MainActivity" >
 
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:text="Conexión:"
+        android:id="@+id/textView"
+        android:layout_above="@+id/LinearLayout"
+        android:layout_alignParentStart="true" />
     <LinearLayout
         android:id="@+id/LinearLayout"
-        android:layout_width="200dp"
-        android:layout_height="wrap_content"
+        android:layout_width="match_parent"
+        android:layout_height="220dp"
         android:layout_centerHorizontal="true"
         android:layout_centerVertical="true"
         android:orientation="vertical">
 
-        <ListView
+
+       <!-- <ListView
             android:id="@+id/list"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="center"/>
+            android:layout_gravity="center"/>-->
 
         <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
+            android:layout_width="match_parent"
+            android:layout_height="100dp"
             android:orientation="horizontal"
             android:layout_gravity="center"
             android:padding="20dp">
 
             <Button
-                android:id="@+id/boton"
-                android:layout_width="wrap_content"
+                android:id="@+id/botonConectar"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="@string/hablar" />
+                android:layout_weight="1"
+                android:text="@string/conectar"
+                style="@style/Widget.AppCompat.Button.Colored"/>
+
+            <Button
+                android:id="@+id/botonDesconectar"
+                android:layout_weight="1"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="@string/desconectar"
+                style="@style/Widget.AppCompat.Button.Colored"/>
         </LinearLayout>
 
-    <!--<TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/distancia"
-        android:id="@+id/distancia"
-        android:layout_gravity="center"/>-->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceMedium"
+            android:text="Sonido:"
+            android:id="@+id/textView2"
+            android:layout_below="@+id/LinearLayout"
+            android:layout_alignParentStart="true" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="100dp"
+            android:orientation="horizontal"
+            android:layout_gravity="center"
+            android:padding="20dp">
+            <Button
+                android:id="@+id/botonSilencio"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/silenciar"
+                style="@style/Widget.AppCompat.Button.Colored"/>
+            <Button
+                android:id="@+id/botonActivar"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="@string/activar"
+                style="@style/Widget.AppCompat.Button.Colored"/>
+        </LinearLayout>
     </LinearLayout>
 
     <TextView
@@ -52,4 +96,5 @@
         android:textColor="@color/red"
         android:layout_alignParentBottom="true"
         android:layout_centerHorizontal="true"/>
+
 </RelativeLayout>
